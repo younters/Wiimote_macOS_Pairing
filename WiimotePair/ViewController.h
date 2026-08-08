@@ -8,6 +8,6 @@
 @interface ViewController : NSViewController <CBCentralManagerDelegate, IOBluetoothDeviceInquiryDelegate, IOBluetoothDevicePairDelegate>
 
 @property (weak) IBOutlet NSProgressIndicator* progressIndicator;
+@property (weak) IBOutlet NSTextField* searchStatusField;
 
 @end
-

@@ -75,7 +75,7 @@
                     <window key="window" title="WiimotePair" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" restorable="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" animationBehavior="default" id="IQv-IB-iLA">
                         <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
                         <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
-                        <rect key="contentRect" x="196" y="240" width="396" height="175"/>
+                        <rect key="contentRect" x="196" y="240" width="520" height="280"/>
                         <rect key="screenRect" x="0.0" y="0.0" width="1680" height="1027"/>
                         <connections>
                             <outlet property="delegate" destination="B8D-0N-5wS" id="98r-iN-zZc"/>
@@ -94,24 +94,24 @@
             <objects>
                 <viewController id="XfG-lQ-9wD" customClass="ViewController" sceneMemberID="viewController">
                     <view key="view" wantsLayer="YES" id="m2S-Jp-Qdl">
-                        <rect key="frame" x="0.0" y="0.0" width="375" height="194"/>
+                        <rect key="frame" x="0.0" y="0.0" width="520" height="280"/>
                         <autoresizingMask key="autoresizingMask"/>
                         <subviews>
                             <progressIndicator fixedFrame="YES" maxValue="100" indeterminate="YES" controlSize="small" style="spinning" translatesAutoresizingMaskIntoConstraints="NO" id="q6g-QS-hKQ">
-                                <rect key="frame" x="145" y="158" width="16" height="16"/>
+                                <rect key="frame" x="109" y="240" width="16" height="16"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                             </progressIndicator>
                             <textField focusRingType="none" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="4Kz-pD-SGB">
-                                <rect key="frame" x="167" y="158" width="65" height="16"/>
+                                <rect key="frame" x="133" y="238" width="278" height="20"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" lineBreakMode="clipping" title="Searching" id="8aT-aA-V7c">
+                                <textFieldCell key="cell" lineBreakMode="truncatingTail" title="Searching" id="8aT-aA-V7c">
                                     <font key="font" metaFont="system"/>
                                     <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
                             </textField>
                             <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="vqd-w6-ekO">
-                                <rect key="frame" x="20" y="27" width="335" height="112"/>
+                                <rect key="frame" x="30" y="86" width="460" height="126"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                                 <textFieldCell key="cell" alignment="center" id="uuN-fB-a1n">
                                     <font key="font" metaFont="system"/>
@@ -128,6 +128,7 @@ Do not press any other buttons.</string>
                     </view>
                     <connections>
                         <outlet property="progressIndicator" destination="q6g-QS-hKQ" id="OeP-Ij-UWh"/>
+                        <outlet property="searchStatusField" destination="4Kz-pD-SGB" id="OeP-Ij-Status"/>
                     </connections>
                 </viewController>
                 <customObject id="rPt-NT-nkU" userLabel="First Responder" customClass="NSResponder" sceneMemberID="firstResponder"/>
