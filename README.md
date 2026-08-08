@@ -4,6 +4,14 @@ A native utility for pairing and maintaining a Wii Remote connection on macOS, i
 
 This version fixes an issue where the remote completes pairing, flashes all four LEDs, and powers off a few seconds later. The app preserves the pairing session until macOS finishes creating the physical HID device, then initializes the remote through IOHID.
 
+## Interface
+
+WiimotePair follows the macOS appearance automatically and provides a compact pairing view plus an expandable diagnostic log.
+
+![WiimotePair searching for a Wii Remote in Dark Mode](Documentation/Images/wiimotepair-search-dark.png)
+
+![WiimotePair diagnostic details in Light Mode](Documentation/Images/wiimotepair-details-light.png)
+
 ## Requirements
 
 - macOS 12.0 or later;
@@ -30,13 +38,6 @@ System Settings → Privacy & Security → Bluetooth → WiimotePair
 
 Make sure the switch next to WiimotePair is enabled. If Bluetooth access was previously denied, quit the app completely with `Command-Q`, enable it in System Settings, and open the app again.
 
-The app does **not** require:
-
-- Accessibility access;
-- Input Monitoring;
-- Full Disk Access;
-- access to Documents, Desktop, or other personal files;
-- an administrator password for normal pairing and reconnection.
 
 The downloadable build is signed ad hoc rather than notarized by Apple. If Gatekeeper blocks the first launch:
 
@@ -46,31 +47,68 @@ The downloadable build is signed ad hoc rather than notarized by Apple. If Gatek
 
 Only bypass Gatekeeper for a build obtained from this repository or produced locally with `Scripts/build.sh`.
 
-## First-time pairing
+## Supported Wii Remotes
+
+WiimotePair supports both official Wii Remote revisions:
+
+| Model | Bluetooth name | HID vendor/product ID
+| --- | --- | --- | --- |
+| Wii Remote | `Nintendo RVL-CNT-01` | `057e:0306`
+| Wii Remote Plus | `Nintendo RVL-CNT-01-TR` | `057e:0330`
+
+The procedure visible to the user is the same for both models. WiimotePair detects the Bluetooth name and then matches the correct physical HID product automatically.
+
+## First-time synchronization
 
 1. If the remote is already listed but does not work, remove it from **System Settings → Bluetooth**.
 2. Open `WiimotePair.app`.
-3. Press only the red **SYNC** button behind the battery cover.
+3. Remove the battery cover and briefly press only the red **SYNC** button.
 4. Do not press any other buttons during pairing.
-5. Wait until the app displays a message similar to:
+5. The four player LEDs should flash while the remote is discoverable.
+6. Wait until the app displays:
 
    ```text
-   HID: connected and receiving • report 0x30
+   Wii Remote Connected
    ```
+
+Choose **Show Details** (or press `Command-D`) to inspect the underlying Bluetooth and HID messages, including the first received report.
+
+### How synchronization works
+
+The initial Bluetooth synchronization is equivalent for `RVL-CNT-01` and `RVL-CNT-01-TR`:
+
+1. WiimotePair performs a Bluetooth Classic inquiry and recognizes a device whose name starts with `Nintendo RVL-CNT-01`.
+2. The red SYNC button places the remote in discoverable pairing mode. Regular face buttons do not start first-time pairing.
+3. Wii Remotes require a six-byte binary PIN derived from the Mac Bluetooth controller address in reverse byte order. WiimotePair submits this key through the macOS Bluetooth pairing service; it is not a text PIN that the user types.
+4. After pairing, macOS establishes the Bluetooth HID connection and exposes the physical Nintendo device to IOHID.
+5. WiimotePair selects product `0x0306` for the original Wii Remote or `0x0330` for the Wii Remote Plus. It ignores the synthetic game-controller device created by macOS.
+6. The app opens the physical HID device, enables player-one LED, selects report mode `0x30`, and requests status. The connection is considered ready only after a real input report arrives.
+
+The important difference is internal: the `RVL-CNT-01-TR` is more sensitive to the pairing session being stopped too early. WiimotePair keeps the completed pairing object alive while macOS creates the physical HID device, preventing the Remote Plus from flashing all four LEDs and powering off immediately after pairing. This behavior is harmless for the original `RVL-CNT-01` and lets both revisions use one workflow.
 
 macOS may display the `RVL-CNT-01-TR` as a “Game Controller.” This is only its Bluetooth UI classification and does not prove that the physical HID session is ready.
 
 ## Reconnecting later
 
-After the first successful pairing, do not use the SYNC button again:
+After either model has synchronized successfully, its Bluetooth link key is stored by macOS. Do not use the red SYNC button for normal reconnection:
 
-1. Open WiimotePair.
-2. Press `A`, `1`, or another normal button once.
-3. Wait for `HID: connected and receiving`.
+1. Open WiimotePair or Dolphin.
+2. Press `A` or another normal button once.
+3. Wait for **Wii Remote Connected**.
 
-Use the red **SYNC** button only when you need to pair the remote again from scratch. If reconnection fails, quit and reopen the app or toggle Bluetooth off and on before retrying.
+The regular button wakes the remote and asks it to reconnect using the stored pairing. Use the red **SYNC** button only when pairing from scratch, after removing the controller from Bluetooth settings, or when moving it between a Wii and a Mac and the stored relationship needs to be replaced. If reconnection fails, quit and reopen the app or toggle Bluetooth off and on before retrying.
 
-## Status messages
+## Interface and shortcuts
+
+The main window presents the connection as four clear stages: searching, connecting, connected, or connection issue. Technical messages remain available in the expandable diagnostics panel.
+
+- `Command-D`: show or hide diagnostic details;
+- `Command-R`: discard the current selection and search again;
+- `Command-Q`: quit WiimotePair.
+
+The Bluetooth and HID indicators use both text and color so their meaning remains accessible without relying on color alone.
+
+## Diagnostic messages
 
 - `ACL disconnected`: there is no basic Bluetooth connection; press a button on the remote.
 - `ACL connected`: macOS sees the Bluetooth device, but the physical HID has not appeared yet.

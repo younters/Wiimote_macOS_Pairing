@@ -99,8 +99,17 @@ static void HIDInputReportCallback(void* context,
     BOOL _receivedHIDReport;
     BOOL _experimentalMode;
 
-    NSTextField* _connectionStatusField;
-    NSButton* _experimentalModeButton;
+    NSImageView* _stateImageView;
+    NSProgressIndicator* _progressIndicator;
+    NSTextField* _stateTitleField;
+    NSTextField* _stateMessageField;
+    NSTextField* _bluetoothStatusField;
+    NSTextField* _hidStatusField;
+    NSButton* _detailsButton;
+    NSScrollView* _detailsScrollView;
+    NSTextView* _detailsTextView;
+    NSMutableArray<NSString*>* _diagnosticEntries;
+    BOOL _detailsVisible;
 }
 
 - (void)viewDidLoad {
@@ -109,36 +118,8 @@ static void HIDInputReportCallback(void* context,
     _experimentalMode = YES;
     _hidInputBuffer = calloc(kWiimoteInputBufferSize, sizeof(uint8_t));
 
-    _connectionStatusField = [NSTextField labelWithString:@"Bluetooth: initializing…"];
-    _connectionStatusField.alignment = NSTextAlignmentCenter;
-    _connectionStatusField.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
-    _connectionStatusField.textColor = [NSColor secondaryLabelColor];
-    _connectionStatusField.lineBreakMode = NSLineBreakByWordWrapping;
-    _connectionStatusField.usesSingleLineMode = NO;
-    _connectionStatusField.maximumNumberOfLines = 2;
-    _connectionStatusField.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:_connectionStatusField];
-
-    _experimentalModeButton = [NSButton checkboxWithTitle:@"Maintain HID session (experimental)"
-                                                     target:self
-                                                     action:@selector(experimentalModeChanged:)];
-    _experimentalModeButton.state = NSControlStateValueOn;
-    _experimentalModeButton.font = [NSFont systemFontOfSize:11];
-    _experimentalModeButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:_experimentalModeButton];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_connectionStatusField.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24],
-        [_connectionStatusField.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24],
-        [_connectionStatusField.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-10],
-        [_connectionStatusField.heightAnchor constraintGreaterThanOrEqualToConstant:30],
-        [_experimentalModeButton.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:32],
-        [_experimentalModeButton.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-32],
-        [_experimentalModeButton.bottomAnchor constraintEqualToAnchor:_connectionStatusField.topAnchor constant:-6],
-    ]];
-
-    self.searchStatusField.stringValue = @"Searching for Wii Remotes…";
-    [self.progressIndicator startAnimation:self];
+    _diagnosticEntries = [NSMutableArray array];
+    [self buildInterface];
     [self setConnectionStatus:@"Bluetooth: preparing physical HID monitor…"];
     [self setupHIDManager];
 }
@@ -146,7 +127,8 @@ static void HIDInputReportCallback(void* context,
 - (void)viewDidAppear {
     [super viewDidAppear];
 
-    self.view.window.contentMinSize = NSMakeSize(520, 280);
+    self.view.window.contentMinSize = NSMakeSize(520, 330);
+    self.view.window.contentMaxSize = NSMakeSize(720, 540);
 
     if (_centralManager == nil) {
         _centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:nil];
@@ -183,29 +165,201 @@ static void HIDInputReportCallback(void* context,
     }];
 }
 
-- (void)setConnectionStatus:(NSString*)status {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self->_connectionStatusField.stringValue = status;
-        self->_connectionStatusField.toolTip = status;
-    });
+- (NSTextField*)labelWithText:(NSString*)text font:(NSFont*)font color:(NSColor*)color {
+    NSTextField* label = [NSTextField labelWithString:text];
+    label.font = font;
+    label.textColor = color;
+    label.alignment = NSTextAlignmentCenter;
+    label.lineBreakMode = NSLineBreakByWordWrapping;
+    label.maximumNumberOfLines = 0;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    return label;
 }
 
-- (void)experimentalModeChanged:(NSButton*)sender {
-    _experimentalMode = sender.state == NSControlStateValueOn;
+- (void)buildInterface {
+    _stateImageView = [[NSImageView alloc] init];
+    _stateImageView.image = [NSImage imageWithSystemSymbolName:@"antenna.radiowaves.left.and.right"
+                                      accessibilityDescription:@"Searching"];
+    _stateImageView.contentTintColor = NSColor.controlAccentColor;
+    _stateImageView.symbolConfiguration = [NSImageSymbolConfiguration configurationWithPointSize:38 weight:NSFontWeightRegular];
+    _stateImageView.translatesAutoresizingMaskIntoConstraints = NO;
 
-    if (!_experimentalMode) {
-        [_hidConnectionTimer invalidate];
-        _hidConnectionTimer = nil;
-        [self closeHIDDevice];
-        [self setConnectionStatus:@"HID: experimental monitoring disabled"];
-        return;
+    _progressIndicator = [[NSProgressIndicator alloc] init];
+    _progressIndicator.style = NSProgressIndicatorStyleSpinning;
+    _progressIndicator.controlSize = NSControlSizeSmall;
+    _progressIndicator.indeterminate = YES;
+    _progressIndicator.translatesAutoresizingMaskIntoConstraints = NO;
+    [_progressIndicator startAnimation:self];
+
+    _stateTitleField = [self labelWithText:@"Preparing Bluetooth…"
+                                      font:[NSFont systemFontOfSize:20 weight:NSFontWeightSemibold]
+                                     color:NSColor.labelColor];
+    _stateMessageField = [self labelWithText:@"WiimotePair is getting ready."
+                                        font:[NSFont systemFontOfSize:13]
+                                       color:NSColor.secondaryLabelColor];
+
+    _bluetoothStatusField = [self labelWithText:@"●  Bluetooth Preparing"
+                                           font:[NSFont systemFontOfSize:11 weight:NSFontWeightMedium]
+                                          color:NSColor.secondaryLabelColor];
+    _hidStatusField = [self labelWithText:@"●  HID Preparing"
+                                     font:[NSFont systemFontOfSize:11 weight:NSFontWeightMedium]
+                                    color:NSColor.secondaryLabelColor];
+
+    NSStackView* statusStack = [NSStackView stackViewWithViews:@[_bluetoothStatusField, _hidStatusField]];
+    statusStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    statusStack.spacing = 22;
+    statusStack.alignment = NSLayoutAttributeCenterY;
+    statusStack.distribution = NSStackViewDistributionFillEqually;
+    statusStack.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _detailsButton = [NSButton buttonWithTitle:@"Show Details"
+                                        target:self
+                                        action:@selector(toggleDetails:)];
+    _detailsButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+    _detailsButton.font = [NSFont systemFontOfSize:12];
+    _detailsButton.toolTip = @"Show Bluetooth and HID diagnostic messages";
+    _detailsButton.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _detailsTextView = [[NSTextView alloc] init];
+    _detailsTextView.editable = NO;
+    _detailsTextView.selectable = YES;
+    _detailsTextView.font = [NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightRegular];
+    _detailsTextView.textColor = NSColor.secondaryLabelColor;
+    _detailsTextView.backgroundColor = NSColor.clearColor;
+    _detailsTextView.textContainerInset = NSMakeSize(8, 8);
+
+    _detailsScrollView = [[NSScrollView alloc] init];
+    _detailsScrollView.documentView = _detailsTextView;
+    _detailsScrollView.hasVerticalScroller = YES;
+    _detailsScrollView.borderType = NSBezelBorder;
+    _detailsScrollView.hidden = YES;
+    _detailsScrollView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    for (NSView* view in @[_stateImageView, _progressIndicator, _stateTitleField, _stateMessageField,
+                           statusStack, _detailsButton, _detailsScrollView]) {
+        [self.view addSubview:view];
     }
 
-    [self setConnectionStatus:@"HID: experimental monitoring enabled"];
-    [self attachExistingHIDDeviceIfAvailable];
-    if (_hidDevice == NULL && _pairedDevice != nil) {
-        [self beginWaitingForHIDDevice];
+    [NSLayoutConstraint activateConstraints:@[
+        [_stateImageView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:30],
+        [_stateImageView.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [_stateImageView.widthAnchor constraintEqualToConstant:48],
+        [_stateImageView.heightAnchor constraintEqualToConstant:48],
+        [_progressIndicator.topAnchor constraintEqualToAnchor:_stateImageView.bottomAnchor constant:7],
+        [_progressIndicator.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [_stateTitleField.topAnchor constraintEqualToAnchor:_progressIndicator.bottomAnchor constant:12],
+        [_stateTitleField.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:32],
+        [_stateTitleField.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-32],
+        [_stateMessageField.topAnchor constraintEqualToAnchor:_stateTitleField.bottomAnchor constant:9],
+        [_stateMessageField.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:42],
+        [_stateMessageField.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-42],
+        [_stateMessageField.heightAnchor constraintGreaterThanOrEqualToConstant:42],
+        [statusStack.topAnchor constraintEqualToAnchor:_stateMessageField.bottomAnchor constant:16],
+        [statusStack.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [statusStack.widthAnchor constraintLessThanOrEqualToConstant:390],
+        [_detailsButton.topAnchor constraintEqualToAnchor:statusStack.bottomAnchor constant:16],
+        [_detailsButton.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [_detailsScrollView.topAnchor constraintEqualToAnchor:_detailsButton.bottomAnchor constant:12],
+        [_detailsScrollView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:24],
+        [_detailsScrollView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24],
+        [_detailsScrollView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:-18],
+    ]];
+}
+
+- (void)toggleDetails:(id)sender {
+    _detailsVisible = !_detailsVisible;
+    _detailsScrollView.hidden = !_detailsVisible;
+    _detailsButton.title = _detailsVisible ? @"Hide Details" : @"Show Details";
+
+    NSRect frame = self.view.window.frame;
+    CGFloat targetHeight = _detailsVisible ? 500 : 330;
+    CGFloat delta = targetHeight - self.view.window.contentLayoutRect.size.height;
+    frame.origin.y -= delta;
+    frame.size.height += delta;
+    [self.view.window setFrame:frame display:YES animate:YES];
+}
+
+- (IBAction)searchAgain:(id)sender {
+    if (_deviceInquiry == nil) {
+        _deviceInquiry = [IOBluetoothDeviceInquiry inquiryWithDelegate:self];
+        _deviceInquiry.searchType = kIOBluetoothDeviceSearchClassic;
+    } else {
+        [_deviceInquiry stop];
+        [_deviceInquiry clearFoundDevices];
     }
+
+    _pairedDevice = nil;
+    [self closeHIDDevice];
+    [self setConnectionStatus:@"Bluetooth: searching again…"];
+    [_deviceInquiry start];
+}
+
+- (void)updatePresentationForDiagnostic:(NSString*)status {
+    BOOL connected = [status containsString:@"connected and receiving"];
+    BOOL failed = [status containsString:@"failed"] || [status containsString:@"error"] ||
+                  [status containsString:@"powered off"] || [status containsString:@"disabled"];
+    BOOL connecting = _pairedDevice != nil || [status containsString:@"physical device"] ||
+                      [status containsString:@"waiting for first packet"] || [status containsString:@"reports sent"];
+
+    if (connected) {
+        _stateImageView.image = [NSImage imageWithSystemSymbolName:@"checkmark.circle.fill"
+                                          accessibilityDescription:@"Connected"];
+        _stateImageView.contentTintColor = NSColor.systemGreenColor;
+        _stateTitleField.stringValue = @"Wii Remote Connected";
+        _stateMessageField.stringValue = [NSString stringWithFormat:@"%@ is connected and ready to use.",
+                                           _pairedDevice.name ?: @"Your controller"];
+        _bluetoothStatusField.stringValue = @"●  Bluetooth Connected";
+        _hidStatusField.stringValue = @"●  HID Ready";
+        _bluetoothStatusField.textColor = NSColor.systemGreenColor;
+        _hidStatusField.textColor = NSColor.systemGreenColor;
+        _progressIndicator.hidden = YES;
+    } else if (failed) {
+        _stateImageView.image = [NSImage imageWithSystemSymbolName:@"exclamationmark.triangle.fill"
+                                          accessibilityDescription:@"Connection issue"];
+        _stateImageView.contentTintColor = NSColor.systemOrangeColor;
+        _stateTitleField.stringValue = @"Connection Issue";
+        _stateMessageField.stringValue = @"WiimotePair could not finish the connection. Open Details for diagnostic information.";
+        _hidStatusField.stringValue = @"●  HID Needs Attention";
+        _hidStatusField.textColor = NSColor.systemOrangeColor;
+        _progressIndicator.hidden = YES;
+    } else if (connecting) {
+        _stateImageView.image = [NSImage imageWithSystemSymbolName:@"gamecontroller.fill"
+                                          accessibilityDescription:@"Connecting controller"];
+        _stateImageView.contentTintColor = NSColor.controlAccentColor;
+        _stateTitleField.stringValue = @"Connecting Wii Remote…";
+        _stateMessageField.stringValue = @"Keep the controller close to your Mac while the HID session starts.";
+        _bluetoothStatusField.stringValue = @"●  Bluetooth Connected";
+        _hidStatusField.stringValue = @"●  HID Connecting";
+        _bluetoothStatusField.textColor = NSColor.systemGreenColor;
+        _hidStatusField.textColor = NSColor.secondaryLabelColor;
+        _progressIndicator.hidden = NO;
+    } else {
+        _stateImageView.image = [NSImage imageWithSystemSymbolName:@"antenna.radiowaves.left.and.right"
+                                          accessibilityDescription:@"Searching for Wii Remotes"];
+        _stateImageView.contentTintColor = NSColor.controlAccentColor;
+        _stateTitleField.stringValue = @"Searching for Wii Remotes…";
+        _stateMessageField.stringValue = @"Press the red SYNC button inside the battery compartment. Do not press any other buttons.";
+        _bluetoothStatusField.stringValue = @"●  Bluetooth Ready";
+        _hidStatusField.stringValue = @"●  HID Monitoring";
+        _bluetoothStatusField.textColor = NSColor.systemGreenColor;
+        _hidStatusField.textColor = NSColor.secondaryLabelColor;
+        _progressIndicator.hidden = NO;
+    }
+}
+
+- (void)setConnectionStatus:(NSString*)status {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSDateFormatter* formatter = [[NSDateFormatter alloc] init];
+        formatter.dateFormat = @"HH:mm:ss";
+        NSString* entry = [NSString stringWithFormat:@"[%@] %@", [formatter stringFromDate:NSDate.date], status];
+        [self->_diagnosticEntries addObject:entry];
+        if (self->_diagnosticEntries.count > 100) {
+            [self->_diagnosticEntries removeObjectAtIndex:0];
+        }
+        self->_detailsTextView.string = [self->_diagnosticEntries componentsJoinedByString:@"\n"];
+        [self->_detailsTextView scrollToEndOfDocument:nil];
+        [self updatePresentationForDiagnostic:status];
+    });
 }
 
 #pragma mark - Physical IOHID session
@@ -625,8 +779,6 @@ static void HIDInputReportCallback(void* context,
     // connected device, which aborts the HID handshake of RVL-CNT-01-TR remotes.
     [self preparePairedDevice:pairedDevice
                 statusPrefix:[NSString stringWithFormat:@"paired • %@", pairedDevice.name ?: @"Wii Remote"]];
-    [self showPairingResultAlertWithTitle:@"Paired"
-                                     text:@"The Wii Remote was paired. WiimotePair is waiting for the physical HID device and the first input report."];
 }
 
 @end
