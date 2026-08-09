@@ -102,11 +102,15 @@ The regular button wakes the remote and asks it to reconnect using the stored pa
 
 The main window presents the connection as four clear stages: searching, connecting, connected, or connection issue. Technical messages remain available in the expandable diagnostics panel.
 
+If Dolphin or another application already owns the physical HID device, WiimotePairPlus displays **Wii Remote Connected** with **HID In Use**. This is a successful handoff, not a connection error. Diagnostic messages never move a confirmed connection back to the connecting state.
+
 - `Command-D`: show or hide diagnostic details;
 - `Command-R`: discard the current selection and search again;
 - `Command-Q`: quit WiimotePair.
 
 The Bluetooth and HID indicators use both text and color so their meaning remains accessible without relying on color alone.
+
+After a controller reaches **Wii Remote Connected**, choose **Pair Another Remote** to hand it off to macOS/Dolphin and return to discovery. The existing Bluetooth pairing is preserved; press the red SYNC button only on the additional remote. Repeat the process for each controller you want to pair.
 
 ## Diagnostic messages
 
