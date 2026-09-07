@@ -70,3 +70,10 @@ fastlane/test_output
 # https://github.com/johnno1962/injectionforxcode
 
 iOSInjectionProject/
+
+# Local Python bytecode
+__pycache__/
+*.pyc
+
+# Candidate packages stay local
+dist-candidate/

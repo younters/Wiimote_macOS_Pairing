@@ -1,217 +1,71 @@
-# WiimotePair for macOS
+# WiimotePairPlus for macOS
 
-A native utility for pairing and maintaining a Wii Remote connection on macOS, including the **Wii Remote Plus with MotionPlus Inside (`Nintendo RVL-CNT-01-TR`)**.
+A native macOS utility that pairs and reconnects Wii remotes, including the tested third-party remotes that report HID vendor/product IDs of zero.
 
-This version fixes an issue where the remote completes pairing, flashes all four LEDs, and powers off a few seconds later. The app preserves the pairing session until macOS finishes creating the physical HID device, then initializes the remote through IOHID.
+Version **1.4.0 (18)** adds guided, timed pairing with an explicit PIN mode, a controller picker, named button display, and portable remote-identity import/export. This candidate is ad hoc signed and has not been notarized.
 
-## Interface
+## Use
 
-WiimotePair follows the macOS appearance automatically and provides a compact pairing view plus an expandable diagnostic log.
+1. Download the DMG from [Releases](https://github.com/younters/Wiimote_macOS_Pairing/releases), open it, and drag WiimotePair into Applications. Open the app and allow Bluetooth access if prompted. This build is not notarized; if macOS blocks it, use **System Settings → Privacy & Security → Open Anyway** after attempting to launch it, provided you trust the download.
+2. Select the intended remote and a pairing mode, then click **Prepare Pairing**. The app stops discovery before arming the timed attempt.
+3. Follow the instruction shown in the app, then click **Pair Now** while the LEDs blink:
+   - **Red SYNC · Save pairing:** press the red **SYNC** button inside the battery compartment. This mode supplies the binary PIN derived from the Mac Bluetooth adapter address.
+   - **1 + 2 · Guest PIN:** turn the remote off, then hold **1 + 2** together. This mode supplies the binary PIN derived from the remote address. macOS may still remember the remote's identity or pairing state.
+4. Wait for **Wii Remote Connected**. Readiness requires a valid button report, not just a pairing callback or command acknowledgment.
 
-![WiimotePair searching for a Wii Remote in Dark Mode](Documentation/Images/wiimotepair-search-dark.png)
+Automatic pairing remains available and uses the red-SYNC PIN strategy. It alternates Bluetooth Classic discovery with attempts for remembered remotes. **Stop Auto Pair** pauses new attempts while preserving a working HID connection; **Start Auto Pair** resumes them.
 
-![WiimotePair diagnostic details in Light Mode](Documentation/Images/wiimotepair-details-light.png)
+If the selected target is already paired, wake it with **A**, **1**, or another regular button and use the guided action. The app reconnects it without removing its existing macOS pairing or Bluetooth bond. Do not press SYNC merely to reconnect an already paired remote.
 
-## Requirements
+Choose **Pair Another Remote** to hand the current controller to macOS/your controller application and automatically discover or reconnect another remote. This is not a multi-controller input viewer. Previously handed-off controllers are skipped until **Command-R** resets the selection.
 
-- macOS 12.0 or later;
-- a Mac with Bluetooth;
-- Xcode with the macOS SDK to build from source;
-- an original `RVL-CNT-01` or `RVL-CNT-01-TR` Wii Remote.
+**Show Details** opens timestamped diagnostics. **Copy Diagnostics** copies the current log and version information. The main window displays pressed buttons by name, including **Home**, and reports unknown button bits explicitly. Logs include remote addresses and a bounded number of input samples; PINs and link keys are omitted.
 
-The `RVL-CNT-01-TR` is identified by:
+## Compatibility
 
-- Vendor ID: `0x057e`;
-- Product ID: `0x0330`.
+- macOS 12 or later on Apple silicon or Intel. The build script produces and verifies a universal executable.
+- Official `Nintendo RVL-CNT-01` and `Nintendo RVL-CNT-01-TR` HID identities `057e:0306` and `057e:0330` are supported by the matching policy. Physical pairing and input on these revisions remain unverified for this candidate.
+- Two third-party `Nintendo RVL-CNT-01` controllers with Bluetooth transport, VID/PID `0000:0000`, and HID serials matching their Bluetooth addresses completed pairing and produced confirmed button input in live build 17; HOME presses and releases were also verified on one remote. The exception requires all of those properties and excludes synthetic devices.
+- A third similar controller has not completed authentication and remains unsupported in practice until live input succeeds.
+- Newly discovered Wii-named remotes are remembered, including names delivered after the initial discovery callback. Remembered addresses and macOS's existing Wii pairings are tried directly, bypassing name-filtered discovery.
+- Some clones respond to the Wii's limited inquiry (LIAC) and may be absent from ordinary Mac discovery. This build does **not** claim a working low-level LIAC scanner on macOS. Their identities must first be learned through supported discovery or imported from a completed discovery profile. Preferences and Bluetooth bonds do not travel inside the app ZIP.
+- MotionPlus, extensions, speaker/audio, Dolphin integration, and long-duration reliability have not yet been verified with this clone.
 
-The original Wii Remote uses Product ID `0x0306`.
+For another installation, a developer can provision independently verified controller addresses in the `KnownRemoteAddresses` array under the `org.dolphin-emu.WiimotePair` preferences domain. This is a setup/debugging fallback, not a requirement to type an address for each pairing attempt. Never add unrelated nearby devices.
 
-## Required permissions
+## Build and test
 
-WiimotePair only needs permission to use **Bluetooth**.
-
-On the first launch, macOS should display a Bluetooth access prompt. Choose **Allow**. You can review or change this permission later at:
-
-```text
-System Settings → Privacy & Security → Bluetooth → WiimotePair
-```
-
-Make sure the switch next to WiimotePair is enabled. If Bluetooth access was previously denied, quit the app completely with `Command-Q`, enable it in System Settings, and open the app again.
-
-
-The downloadable build is signed ad hoc rather than notarized by Apple. If Gatekeeper blocks the first launch:
-
-1. Control-click `WiimotePair.app` and choose **Open**.
-2. Confirm **Open** in the dialog.
-3. If that option is unavailable, open **System Settings → Privacy & Security**, locate the blocked-app message, and choose **Open Anyway**.
-
-Only bypass Gatekeeper for a build obtained from this repository or produced locally with `Scripts/build.sh`.
-
-## Supported Wii Remotes
-
-WiimotePair supports both official Wii Remote revisions:
-
-| Model | Bluetooth name | HID vendor/product ID
-| --- | --- | --- | --- |
-| Wii Remote | `Nintendo RVL-CNT-01` | `057e:0306`
-| Wii Remote Plus | `Nintendo RVL-CNT-01-TR` | `057e:0330`
-
-The procedure visible to the user is the same for both models. WiimotePair detects the Bluetooth name and then matches the correct physical HID product automatically.
-
-## First-time synchronization
-
-1. If the remote is already listed but does not work, remove it from **System Settings → Bluetooth**.
-2. Open `WiimotePair.app`.
-3. Remove the battery cover and briefly press only the red **SYNC** button.
-4. Do not press any other buttons during pairing.
-5. The four player LEDs should flash while the remote is discoverable.
-6. Wait until the app displays:
-
-   ```text
-   Wii Remote Connected
-   ```
-
-Choose **Show Details** (or press `Command-D`) to inspect the underlying Bluetooth and HID messages, including the first received report.
-
-### How synchronization works
-
-The initial Bluetooth synchronization is equivalent for `RVL-CNT-01` and `RVL-CNT-01-TR`:
-
-1. WiimotePair performs a Bluetooth Classic inquiry and recognizes a device whose name starts with `Nintendo RVL-CNT-01`.
-2. The red SYNC button places the remote in discoverable pairing mode. Regular face buttons do not start first-time pairing.
-3. Wii Remotes require a six-byte binary PIN derived from the Mac Bluetooth controller address in reverse byte order. WiimotePair submits this key through the macOS Bluetooth pairing service; it is not a text PIN that the user types.
-4. After pairing, macOS establishes the Bluetooth HID connection and exposes the physical Nintendo device to IOHID.
-5. WiimotePair selects product `0x0306` for the original Wii Remote or `0x0330` for the Wii Remote Plus. It ignores the synthetic game-controller device created by macOS.
-6. The app opens the physical HID device, enables player-one LED, selects report mode `0x30`, and requests status. The connection is considered ready only after a real input report arrives.
-
-The important difference is internal: the `RVL-CNT-01-TR` is more sensitive to the pairing session being stopped too early. WiimotePair keeps the completed pairing object alive while macOS creates the physical HID device, preventing the Remote Plus from flashing all four LEDs and powering off immediately after pairing. This behavior is harmless for the original `RVL-CNT-01` and lets both revisions use one workflow.
-
-macOS may display the `RVL-CNT-01-TR` as a “Game Controller.” This is only its Bluetooth UI classification and does not prove that the physical HID session is ready.
-
-## Reconnecting later
-
-After either model has synchronized successfully, its Bluetooth link key is stored by macOS. Do not use the red SYNC button for normal reconnection:
-
-1. Open WiimotePair or Dolphin.
-2. Press `A` or another normal button once.
-3. Wait for **Wii Remote Connected**.
-
-The regular button wakes the remote and asks it to reconnect using the stored pairing. Use the red **SYNC** button only when pairing from scratch, after removing the controller from Bluetooth settings, or when moving it between a Wii and a Mac and the stored relationship needs to be replaced. If reconnection fails, quit and reopen the app or toggle Bluetooth off and on before retrying.
-
-## Interface and shortcuts
-
-The main window presents the connection as four clear stages: searching, connecting, connected, or connection issue. Technical messages remain available in the expandable diagnostics panel.
-
-If Dolphin or another application already owns the physical HID device, WiimotePairPlus displays **Wii Remote Connected** with **HID In Use**. This is a successful handoff, not a connection error. Diagnostic messages never move a confirmed connection back to the connecting state.
-
-- `Command-D`: show or hide diagnostic details;
-- `Command-R`: discard the current selection and search again;
-- `Command-Q`: quit WiimotePair.
-
-The Bluetooth and HID indicators use both text and color so their meaning remains accessible without relying on color alone.
-
-After a controller reaches **Wii Remote Connected**, choose **Pair Another Remote** to hand it off to macOS/Dolphin and return to discovery. The existing Bluetooth pairing is preserved; press the red SYNC button only on the additional remote. Repeat the process for each controller you want to pair.
-
-## Diagnostic messages
-
-- `ACL disconnected`: there is no basic Bluetooth connection; press a button on the remote.
-- `ACL connected`: macOS sees the Bluetooth device, but the physical HID has not appeared yet.
-- `physical device open`: the IOHID device was found and is being initialized.
-- `waiting for first packet`: the initial commands were sent successfully.
-- `connected and receiving`: a real input report confirmed that the connection works.
-- `another compatible controller is in use`: another app has exclusive access to a compatible HID device. WiimotePair continues monitoring other matching devices.
-
-## Architecture
-
-The connection flow is:
-
-```text
-Bluetooth discovery
-        ↓
-Pairing with a binary PIN
-        ↓
-macOS HID service opens the L2CAP channels
-        ↓
-IOHIDManager finds the physical Nintendo device
-        ↓
-IOHIDDeviceOpen
-        ↓
-Reports 0x11, 0x12, and 0x15
-        ↓
-The first input report confirms the connection
-```
-
-The app does not open L2CAP channels `0x11` and `0x13` directly. Those channels are owned by the macOS HID service. Opening them simultaneously from the app causes contention with `bluetoothd`, timeouts, and disconnections.
-
-The IOHID matching dictionaries also use `GCSyntheticDevice = false`, preventing the app from opening the synthetic gamepad created by GameController instead of the physical Wii Remote.
-
-### Main components
-
-- `IOBluetoothDeviceInquiry`: discovers nearby remotes;
-- `IOBluetoothDevicePair`: performs pairing with the binary PIN derived from the Mac Bluetooth address;
-- `IOHIDManager`: detects physical `057e:0306` and `057e:0330` devices;
-- `IOHIDDeviceSetReport`: configures the player LED, report mode, and status request;
-- input-report callback: confirms that the HID session is actually functional.
-
-## Quick build
-
-Run this command from the repository root:
+Requires Xcode and the macOS SDK:
 
 ```bash
+./Scripts/test.sh
 ./Scripts/build.sh
+./Scripts/package-dmg.sh
 ```
 
-The script:
+The test runner checks address validation, fair target selection and exclusions, exact clone identity matching, and button parsing using the actual policy functions used by the app. It needs no Bluetooth hardware and does not replace live pairing tests.
 
-1. builds the Release configuration;
-2. creates `dist/WiimotePair.app`;
-3. applies an ad hoc signature with the Bluetooth entitlement;
-4. verifies the signature;
-5. creates `dist/WiimotePair.zip`.
+The build script produces:
 
-Generated files are stored in `dist/` and are not tracked by Git.
+- `dist-candidate/WiimotePair.app` — universal Release app, signed ad hoc by default, with GPL license included.
+- `dist-candidate/WiimotePair-1.4.0.dmg` — drag-to-Applications installer, with SHA-256 sidecar.
+- `dist-candidate/WiimotePair.zip` — candidate archive.
+- `dist-candidate/WiimotePair.zip.sha256` — archive checksum.
 
-## Building with Xcode
+Verify the archive with `cd dist-candidate && shasum -a 256 -c WiimotePair.zip.sha256`.
 
-1. Open `WiimotePair.xcodeproj`.
-2. Select the **WiimotePair** scheme and **My Mac** destination.
-3. To use a development signature, select your team under **Signing & Capabilities**.
-4. Choose **Product → Build**.
-
-If no “Mac Development” certificate is installed, use `Scripts/build.sh` to create an ad hoc signed build for local testing.
-
-## Permissions and security
-
-The required user permission and Gatekeeper steps are described in [Required permissions](#required-permissions). The app carries this Bluetooth entitlement:
-
-```text
-com.apple.security.device.bluetooth
-```
-
-Pairing still depends on private `IOBluetooth` interfaces to send the binary PIN required by a Wii Remote. This version is therefore intended for testing and direct distribution, not for the Mac App Store.
+Ad hoc signing is suitable for local testing. Normal Gatekeeper trust requires Developer ID signing and notarization; this release is distributed ad hoc signed with broader hardware/macOS validation still pending. Pairing depends on private IOBluetooth APIs; missing required selectors are handled with a diagnostic rather than attempting an unsupported call.
 
 ## Troubleshooting
 
-### The remote appears connected but is powered off
+- **Bluetooth access:** enable WiimotePair in System Settings → Privacy & Security → Bluetooth. The app waits for Bluetooth availability instead of quitting when Bluetooth is turned off.
+- **Waiting for a remote:** keep it close, wake it, and allow time for discovery and remembered-device retries. A sleeping target can consume one full attempt.
+- **Bluetooth connected, HID waiting:** copy diagnostics. A link alone does not establish controller input; do not broadly remove HID filters.
+- **HID in use:** another app may own the device. This state is reported separately from confirmed input in WiimotePair.
+- **Copied ZIP on a different Mac:** device preferences and Bluetooth bonds are per-Mac. Discover the remote there or import a completed identity profile, then pair it on that Mac.
 
-“Connected” in System Settings may represent only the ACL link. Check WiimotePair instead; the connection is considered functional only after `HID: connected and receiving` appears.
+See [portable build and signing](Documentation/PORTABLE_BUILD.md) and the [1.4.0 validation record](Documentation/RELEASE_1.4.0.md) for release details and remaining checks.
 
-### All four LEDs flash and then turn off
+## License and origin
 
-Remove the remote from Bluetooth settings, open this version of WiimotePair, and pair it again using only the red SYNC button.
-
-### Another compatible controller is in use
-
-Quit other instances of WiimotePair, Dolphin, WiiController, or similar controller utilities. Then open only the app from `dist/WiimotePair.app`.
-
-### The physical HID is found but cannot be opened
-
-Quit other applications that may be using the remote, reopen WiimotePair, and reconnect. Also verify Bluetooth permission under **Privacy & Security**.
-
-### Xcode cannot find a development certificate
-
-Run `./Scripts/build.sh` to create an ad hoc build, or configure an Apple Developer account in Xcode.
-
-## Origin and license
-
-Based on [dolphin-emu/WiimotePair](https://github.com/dolphin-emu/WiimotePair). This project is licensed under GPL-2.0-or-later; see `LICENSES/GPL-2.0-or-later.txt`.
+Based on [GabrielLascoskiFerraz/WiimotePairPlus](https://github.com/GabrielLascoskiFerraz/WiimotePairPlus), originally [dolphin-emu/WiimotePair](https://github.com/dolphin-emu/WiimotePair). GPL-2.0-or-later; see [LICENSES/GPL-2.0-or-later.txt](LICENSES/GPL-2.0-or-later.txt). Wii is a Nintendo trademark; this project is not affiliated with Nintendo.
