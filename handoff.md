@@ -52,4 +52,4 @@ Dolphin's current Linux source deliberately uses LIAC for third-party remotes. A
 
 With an empty app identity cache (use an isolated test preference domain rather than erasing user state), an unknown compatible clone is discovered and paired after SYNC, with no manual address/profile. Pair another distinct compatible remote with no source changes. The official remote remains usable. Report discovery, PIN exchange, physical input, and reconnect results separately.
 
-See THIRD_CONTROLLER_RESEARCH.md for sources and detailed hypotheses. Keep the released build recoverable when implementing any later fix.
+See [Documentation/THIRD_CONTROLLER_RESEARCH.md](Documentation/THIRD_CONTROLLER_RESEARCH.md) for sources and detailed hypotheses. Keep the released build recoverable when implementing any later fix.
